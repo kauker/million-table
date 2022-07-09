@@ -10,10 +10,10 @@ import TablePagination from './TablePagination';
 const actions = [
     { message: 'sorting', func: getSortedData },
     { message: 'filtering', func: getfilteredData },
-    { message: 'getFilterFields', func: getFilterFields },
+    { message: 'getFields', func: getFilterFields },
 ]
 
-let worker = SWorker.create(actions);
+let worker = SWorker.create(actions);; 
 
 const MAX_ROWS = 1000000;
 const CHUNK_LENGTH = 3000;
@@ -22,7 +22,7 @@ const sortableColumns = [
     { name: 'userId', label: 'Id'},
     { name: 'username', label: 'Username'},
     { name: 'email', label: 'Email'},
-    { name: 'birthdate', label: 'Birthdate'},
+    // { name: 'birthdate', label: 'Birthdate'},
 ]
 
 function TableComponent() {
@@ -43,6 +43,14 @@ function TableComponent() {
         setPageRows(filteredRows.slice((page - 1) * perPage, page * perPage))
         setTotalPages(Math.ceil(filteredRows.length / perPage))
     }, [page, perPage, filteredRows])
+
+    useEffect(() => {
+        worker.postMessage('getFields', [rows, 'vehicle'])
+        .then(filterVals => {
+            setFilterValues(filterVals.map(v => ({label: v, value: v})))          
+        })
+        .catch(console.error)
+    }, [rows])
 
     const onChangeSearchInput = (e) => {
         const { value } = e.target;
@@ -110,13 +118,9 @@ function TableComponent() {
 
             if (users.length >= MAX_ROWS) {
                 setRows(users);
-                setFilteredRows(users)
+                setFilteredRows(users);
 
-                worker.postMessage('getFilterFields', [users, 'vehicle'])
-                .then(filterVals => {
-                    setFilterValues(filterVals.map(v => ({label: v, value: v})))
-                    setRefreshing(false)
-                })
+                setRefreshing(false);
             } else {
                 window.requestAnimationFrame(step);
             }
@@ -188,7 +192,7 @@ function TableComponent() {
                             <td>{u.userId}</td> 
                             <td>{u.username}</td>
                             <td>{u.email}</td>
-                            <td>{u.birthdate.toLocaleDateString()}</td>
+                            {/* <td>{u.birthdate.toLocaleDateString()}</td> */}
                             <td>{u.vehicle}</td>
                         </tr>)
                         : 
@@ -277,10 +281,15 @@ function getfilteredData(arr, query, filterParams) {
 }
 
 function getFilterFields(arr, column) {
-    let uniqueItems = new Set();
+    let uniqueItems = [];
 
-    arr.forEach(v => uniqueItems.add(v[column]));
+    arr.forEach(v => {
+        if (!uniqueItems.includes(v[column])) {
+            uniqueItems.push(v[column])
+        }
+        
+    });
 
-    return [...uniqueItems]
+    return uniqueItems
 
 }
