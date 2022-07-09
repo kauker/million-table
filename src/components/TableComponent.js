@@ -1,22 +1,22 @@
-import { useState, useEffect, useRef, useCallback  } from 'react'
+import { useState, useEffect, useCallback  } from 'react'
 import SWorker from 'simple-web-worker'
 import { debounce } from 'lodash';
 import { faker } from '@faker-js/faker';
+import Select from 'react-select';
 
 import './style.css'
+import TablePagination from './TablePagination';
 
 const actions = [
     { message: 'sorting', func: getSortedData },
     { message: 'filtering', func: getfilteredData },
-    { message: 'func3', func: arg => `Worker 3: ${arg}` },
-    { message: 'func4', func: (arg = 'Working on func4') => `Worker 4: ${arg}` }
+    { message: 'getFilterFields', func: getFilterFields },
 ]
 
 let worker = SWorker.create(actions);
 
 const MAX_ROWS = 1000000;
 const CHUNK_LENGTH = 3000;
-const perPageOptions = [15, 30, 50, 100]
 
 const sortableColumns = [
     { name: 'userId', label: 'Id'},
@@ -30,12 +30,14 @@ function TableComponent() {
     const [filteredRows, setFilteredRows] = useState([]);
     const [pageRows, setPageRows] = useState([]);
     const [query, setQuery] = useState('');
-    const [perPage, setPerPage] = useState(perPageOptions[0]);
+    const [perPage, setPerPage] = useState(15);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [sortParams, setSortParams] = useState({column: null, order: 'asc'});
+    const [filterParams, setFilterParams] = useState({column: 'vehicle', value: ''});
     const [refreshing, setRefreshing] = useState(false);
-    const goToPageInputRef = useRef(null)
+    const [filterValues, setFilterValues] = useState([]);
+    
 
     useEffect(() => {
         setPageRows(filteredRows.slice((page - 1) * perPage, page * perPage))
@@ -46,12 +48,12 @@ function TableComponent() {
         const { value } = e.target;
         setPage(1);
         setQuery(value)
-        debouncedSearch(value);
+        debouncedSearch(value, filterParams);
     }
 
-    const debouncedSearch = useCallback(debounce((query) => {
+    const debouncedSearch = useCallback(debounce((query, filterParams) => {
         setRefreshing(true)
-        worker.postMessage('filtering', [rows, query])
+        worker.postMessage('filtering', [rows, query, filterParams])
         .then(filteredArr => {
             setFilteredRows(filteredArr)
             setRefreshing(false)
@@ -82,11 +84,12 @@ function TableComponent() {
             worker.postMessage('sorting', [rows, newSort])
             .then(sortedArr => {
                 setRows(sortedArr);
-                return worker.postMessage('filtering', [sortedArr, query])
+                return worker.postMessage('filtering', [sortedArr, query, filterParams])
             })
             .then(filteredArr => {
                 setFilteredRows(filteredArr)
                 setRefreshing(false)
+                
             })
             .catch(console.error)
         }, 100)
@@ -108,7 +111,12 @@ function TableComponent() {
             if (users.length >= MAX_ROWS) {
                 setRows(users);
                 setFilteredRows(users)
-                setRefreshing(false)
+
+                worker.postMessage('getFilterFields', [users, 'vehicle'])
+                .then(filterVals => {
+                    setFilterValues(filterVals.map(v => ({label: v, value: v})))
+                    setRefreshing(false)
+                })
             } else {
                 window.requestAnimationFrame(step);
             }
@@ -118,24 +126,17 @@ function TableComponent() {
         
     }
 
-    const onClickGoToPage = () => {
-        const val = goToPageInputRef.current.value;
-        const newPage = parseInt(val, 10);
-        if (newPage >= 1 && newPage < totalPages) {
-            setPage(newPage);
+    const onChangePage = (page) => setPage(page);
+
+    const onSelectChange = (opt) => {
+        const value = opt ? opt.value : '';
+        const newFilterParams = {
+            ...filterParams,
+            value
         }
-        
-        goToPageInputRef.current.value = '';
-    }
+        setFilterParams(newFilterParams)
 
-    const onClickPrev = () => {
-        if (page - 1 <  1) return
-        setPage(page - 1);
-    }
-
-    const onClickNext = () => {
-        if (page + 1 > totalPages) return
-        setPage(page + 1);
+        debouncedSearch(query, newFilterParams);
     }
 
     return (
@@ -167,18 +168,34 @@ function TableComponent() {
                                     : <span>&darr;</span>
                                 : null}
                             </th>)}
-                            <th>Vehicle</th>
+                            <th>
+                                Vehicle
+                                <Select
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    isClearable
+                                    isSearchable
+                                    name="vehicle"
+                                    options={filterValues}
+                                    onChange={onSelectChange}
+                                />
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
-                        {pageRows.map(u => <tr key={u.userId}>
+                    {pageRows.length ? 
+                        pageRows.map(u => <tr key={u.userId}>
                             <td>{u.userId}</td> 
                             <td>{u.username}</td>
                             <td>{u.email}</td>
                             <td>{u.birthdate.toLocaleDateString()}</td>
                             <td>{u.vehicle}</td>
-                        </tr>)}
+                        </tr>)
+                        : 
+                        <tr><td className="text-center" colSpan={5}>No results</td></tr> 
+                    }
                     </tbody>
+                    
                 </table>
                 {refreshing && <div className="spinner-wrapper">
                     <div className="spinner-border text-secondary m-5">
@@ -186,36 +203,15 @@ function TableComponent() {
                     </div>
                 </div>}
             </div>
-            <div className="pagination d-flex mb-5">
-                <div className="page-select d-flex">
-                    <button className="btn btn-light me-2" onClick={onClickPrev}>Prev</button>
-                    <span className="me-2 align-self-center">Page {page} of {totalPages}</span>
-                    <button className="btn btn-light me-4" onClick={onClickNext}>Next</button>
-                    <div className="d-flex">
-                        <span className="me-2 align-self-center">Go to page:</span>
-                        <div className="me-2">
-                            <input 
-                                type="number"
-                                className="form-control"
-                                ref={goToPageInputRef}
-                            />
-                        </div>
-                    </div>
-                    <div className="">
-                        <button className="btn btn-light" onClick={onClickGoToPage}>Go</button>
-                    </div>
-                    
-                </div>
-                <div className="per-page ms-auto">
-                    Rows per page: {perPageOptions.map(num => (
-                        <button 
-                            key={num} 
-                            className={`btn ms-2 ${num === perPage ? 'btn-primary' : 'btn-light'}`}
-                            onClick={() => setPerPage(num)}
-                        >{num}</button>
-                    ))}
-                </div>
-            </div> 
+
+            <TablePagination 
+                page={page} 
+                totalPages={totalPages}
+                onChangePage={onChangePage}
+                perPage={perPage}
+                setPerPage={setPerPage}
+            />
+            
         </div>
     )
 
@@ -251,31 +247,40 @@ function getSortedData(arr, sortParams) {
     return sortedArr
 }
 
-function getfilteredData(arr, query, pagination) {
-    // const { page, perPage } = pagination;
-    // const maxResults = page * perPage;
-    // let count = 0;
-    if (!query) {
+function getfilteredData(arr, query, filterParams) {
+    const { column, value } = filterParams;
+
+    if (!query && !value) {
         return arr
     }
+
     let filteredArr = [];
     for (let i = 0; i < arr.length; i++) {
         const item = arr[i];
         const keys = Object.keys(arr[i]);
-        let isMatch = false;
+        let queryMatch = false;
         keys.forEach(key => {
-            if (typeof item[key] === 'string' && item[key].toLowerCase().includes(query.toLowerCase())) {
-                isMatch = true;
+            if (!queryMatch) {
+                queryMatch = typeof item[key] === 'string' && item[key].toLowerCase().includes(query.toLowerCase());
             }
         })
+
+        let filterMatch = value ? item[column] === value : true;
+        let isMatch = queryMatch && filterMatch;
+
         if (isMatch) {
             filteredArr.push(item);
-            // count++;
         }
-        // if (count >= maxResults) {
-        //     break;
-        // }
     }
 
     return filteredArr
+}
+
+function getFilterFields(arr, column) {
+    let uniqueItems = new Set();
+
+    arr.forEach(v => uniqueItems.add(v[column]));
+
+    return [...uniqueItems]
+
 }

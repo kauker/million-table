@@ -1,5 +1,6 @@
 .table-wrapper {
     min-height: 200px;
+    position: relative;
 }
 .spinner-wrapper {
     position: absolute;
