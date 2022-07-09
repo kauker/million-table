@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/million-table/static/css/main.c6aa0a97.css",
-    "main.js": "/million-table/static/js/main.108f499f.js",
+    "main.js": "/million-table/static/js/main.66bbe8ee.js",
     "static/js/787.26da3fb8.chunk.js": "/million-table/static/js/787.26da3fb8.chunk.js",
     "index.html": "/million-table/index.html",
     "main.c6aa0a97.css.map": "/million-table/static/css/main.c6aa0a97.css.map",
-    "main.108f499f.js.map": "/million-table/static/js/main.108f499f.js.map",
+    "main.66bbe8ee.js.map": "/million-table/static/js/main.66bbe8ee.js.map",
     "787.26da3fb8.chunk.js.map": "/million-table/static/js/787.26da3fb8.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.c6aa0a97.css",
-    "static/js/main.108f499f.js"
+    "static/js/main.66bbe8ee.js"
   ]
 }
